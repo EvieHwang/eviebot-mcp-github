@@ -13,7 +13,9 @@ MCP server for GitHub API access. Runs as a backend behind the [Eviebot MCP Gate
 | `write_file` | Create or update a file in a repo |
 | `create_repo` | Create a new repository |
 | `list_issues` | List issues with optional state/label filters |
+| `get_issue` | Get issue details (state, labels, assignees, body) |
 | `create_issue` | Create a new issue |
+| `update_issue` | Update an issue (title, body, state, labels, assignees) |
 | `list_prs` | List pull requests |
 | `get_pr` | Get PR details including diff stats |
 | `merge_pr` | Merge a pull request |

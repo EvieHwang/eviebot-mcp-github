@@ -10,6 +10,7 @@ from github_client import client, GitHubClientError
 
 def _handle_errors(func):
     """Decorator to catch common GitHub errors."""
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         try:
@@ -20,6 +21,7 @@ def _handle_errors(func):
             return f"GitHub API error ({e.status}): {e.data.get('message', str(e))}"
         except Exception as e:
             return f"Error: {e}"
+
     return wrapper
 
 
@@ -185,9 +187,7 @@ async def create_repo(
 
 
 @_handle_errors
-async def list_issues(
-    repo: str, state: str = "open", labels: str = ""
-) -> str:
+async def list_issues(repo: str, state: str = "open", labels: str = "") -> str:
     """List issues for a repository.
 
     Args:
@@ -198,14 +198,14 @@ async def list_issues(
     r = client.get_repo(repo)
     kwargs = {"state": state}
     if labels:
-        kwargs["labels"] = [l.strip() for l in labels.split(",")]
+        kwargs["labels"] = [lb.strip() for lb in labels.split(",")]
 
     issues = r.get_issues(**kwargs)
     lines = []
     for issue in issues[:50]:
         if issue.pull_request:
             continue
-        label_str = ", ".join(l.name for l in issue.labels) if issue.labels else ""
+        label_str = ", ".join(lb.name for lb in issue.labels) if issue.labels else ""
         label_part = f" [{label_str}]" if label_str else ""
         lines.append(f"#{issue.number} {issue.title}{label_part} ({issue.state})")
 
@@ -236,7 +236,7 @@ async def create_issue(
     if body:
         kwargs["body"] = body
     if labels:
-        kwargs["labels"] = [l.strip() for l in labels.split(",")]
+        kwargs["labels"] = [lb.strip() for lb in labels.split(",")]
     if assignees:
         kwargs["assignees"] = [a.strip() for a in assignees.split(",")]
 
@@ -257,8 +257,7 @@ async def list_prs(repo: str, state: str = "open") -> str:
     lines = []
     for pr in pulls[:50]:
         lines.append(
-            f"#{pr.number} {pr.title} ({pr.state}) "
-            f"[{pr.head.ref} -> {pr.base.ref}]"
+            f"#{pr.number} {pr.title} ({pr.state}) [{pr.head.ref} -> {pr.base.ref}]"
         )
 
     if not lines:
@@ -307,6 +306,78 @@ async def search_code(query: str, repo: str = "") -> str:
     return "\n".join(lines)
 
 
+@_handle_errors
+async def get_issue(repo: str, issue_number: int) -> str:
+    """Get issue details.
+
+    Args:
+        repo: Repository name (e.g., 'my-repo' or 'owner/repo').
+        issue_number: Issue number.
+    """
+    r = client.get_repo(repo)
+    issue = r.get_issue(issue_number)
+    labels = ", ".join(lb.name for lb in issue.labels) if issue.labels else "none"
+    assignees = (
+        ", ".join(a.login for a in issue.assignees) if issue.assignees else "none"
+    )
+    body = issue.body or ""
+    if len(body) > 1000:
+        body = body[:997] + "..."
+    return (
+        f"#{issue.number} {issue.title}\n"
+        f"State: {issue.state}\n"
+        f"Labels: {labels}\n"
+        f"Assignees: {assignees}\n"
+        f"Comments: {issue.comments}\n"
+        f"Created: {issue.created_at.isoformat()}\n"
+        f"Updated: {issue.updated_at.isoformat()}\n"
+        f"URL: {issue.html_url}\n\n"
+        f"{body}"
+    )
+
+
+@_handle_errors
+async def update_issue(
+    repo: str,
+    issue_number: int,
+    title: str = "",
+    body: str = "",
+    state: str = "",
+    labels: str = "",
+    assignees: str = "",
+) -> str:
+    """Update an existing issue.
+
+    Args:
+        repo: Repository name (e.g., 'my-repo' or 'owner/repo').
+        issue_number: Issue number.
+        title: New title (leave empty to keep current).
+        body: New body (leave empty to keep current).
+        state: New state: 'open' or 'closed' (leave empty to keep current).
+        labels: Comma-separated label names (replaces existing).
+        assignees: Comma-separated GitHub usernames (replaces existing).
+    """
+    r = client.get_repo(repo)
+    issue = r.get_issue(issue_number)
+    kwargs = {}
+    if title:
+        kwargs["title"] = title
+    if body:
+        kwargs["body"] = body
+    if state:
+        kwargs["state"] = state
+    if labels:
+        kwargs["labels"] = [lb.strip() for lb in labels.split(",")]
+    if assignees:
+        kwargs["assignees"] = [a.strip() for a in assignees.split(",")]
+
+    if not kwargs:
+        return f"No fields to update on issue #{issue_number}."
+
+    issue.edit(**kwargs)
+    return f"Updated issue #{issue.number}: {issue.title} ({issue.state})\nURL: {issue.html_url}"
+
+
 # --- Stretch tools ---
 
 
@@ -332,9 +403,7 @@ async def get_pr(repo: str, pr_number: int) -> str:
 
 
 @_handle_errors
-async def merge_pr(
-    repo: str, pr_number: int, merge_method: str = "squash"
-) -> str:
+async def merge_pr(repo: str, pr_number: int, merge_method: str = "squash") -> str:
     """Merge a pull request.
 
     Args:

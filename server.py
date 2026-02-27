@@ -4,6 +4,7 @@ from tools import (
     create_branch,
     create_issue,
     create_repo,
+    get_issue,
     get_pr,
     get_repo,
     list_files,
@@ -13,6 +14,7 @@ from tools import (
     merge_pr,
     read_file,
     search_code,
+    update_issue,
     write_file,
 )
 
@@ -21,7 +23,8 @@ mcp = FastMCP(
     instructions=(
         "Manage GitHub repositories for EvieHwang. "
         "Use list_repos to browse repos, read_file/write_file for repo content, "
-        "list_issues/create_issue for issue management, list_prs for pull requests. "
+        "list_issues/get_issue/create_issue/update_issue for issue management, "
+        "list_prs for pull requests. "
         "Repo names can be 'repo-name' (defaults to EvieHwang) or 'owner/repo'."
     ),
 )
@@ -47,7 +50,9 @@ mcp.tool(annotations=READ_ONLY)(read_file)
 mcp.tool(annotations=WRITE)(write_file)
 mcp.tool(annotations=WRITE)(create_repo)
 mcp.tool(annotations=READ_ONLY)(list_issues)
+mcp.tool(annotations=READ_ONLY)(get_issue)
 mcp.tool(annotations=WRITE)(create_issue)
+mcp.tool(annotations=WRITE)(update_issue)
 mcp.tool(annotations=READ_ONLY)(list_prs)
 mcp.tool(annotations=WRITE)(create_branch)
 mcp.tool(annotations=READ_ONLY)(search_code)

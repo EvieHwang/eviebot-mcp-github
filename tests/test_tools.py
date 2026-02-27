@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,9 +46,126 @@ class TestToolErrorHandling:
             # Re-import to get fresh client
             import importlib
             import github_client
+
             importlib.reload(github_client)
             import tools
+
             importlib.reload(tools)
 
             result = run(tools.list_repos())
             assert "GITHUB_TOKEN" in result
+
+
+class TestGetIssue:
+    """Tests for get_issue and update_issue tools."""
+
+    @pytest.fixture(autouse=True)
+    def _import_tools(self):
+        import tools
+
+        self.tools = tools
+
+    def test_returns_issue_details(self):
+        mock_label = MagicMock()
+        mock_label.name = "bug"
+        mock_assignee = MagicMock()
+        mock_assignee.login = "EvieHwang"
+
+        mock_issue = MagicMock()
+        mock_issue.number = 1
+        mock_issue.title = "Add get_issue tool"
+        mock_issue.state = "open"
+        mock_issue.labels = [mock_label]
+        mock_issue.assignees = [mock_assignee]
+        mock_issue.comments = 2
+        mock_issue.created_at.isoformat.return_value = "2026-02-27T00:00:00"
+        mock_issue.updated_at.isoformat.return_value = "2026-02-27T01:00:00"
+        mock_issue.html_url = "https://github.com/EvieHwang/repo/issues/1"
+        mock_issue.body = "We need this tool."
+
+        mock_repo = MagicMock()
+        mock_repo.get_issue.return_value = mock_issue
+
+        with patch("tools.client") as mock_client:
+            mock_client.get_repo.return_value = mock_repo
+            result = run(self.tools.get_issue("repo", 1))
+
+        assert "#1 Add get_issue tool" in result
+        assert "State: open" in result
+        assert "bug" in result
+        assert "EvieHwang" in result
+        assert "We need this tool." in result
+
+    def test_issue_not_found(self):
+        from github import GithubException
+
+        mock_repo = MagicMock()
+        mock_repo.get_issue.side_effect = GithubException(
+            404, {"message": "Not Found"}, None
+        )
+
+        with patch("tools.client") as mock_client:
+            mock_client.get_repo.return_value = mock_repo
+            result = run(self.tools.get_issue("repo", 999))
+
+        assert "404" in result
+
+
+class TestUpdateIssue:
+    @pytest.fixture(autouse=True)
+    def _import_tools(self):
+        import tools
+
+        self.tools = tools
+
+    def test_closes_issue(self):
+        mock_issue = MagicMock()
+        mock_issue.number = 1
+        mock_issue.title = "Some issue"
+        mock_issue.state = "closed"
+        mock_issue.html_url = "https://github.com/EvieHwang/repo/issues/1"
+
+        mock_repo = MagicMock()
+        mock_repo.get_issue.return_value = mock_issue
+
+        with patch("tools.client") as mock_client:
+            mock_client.get_repo.return_value = mock_repo
+            result = run(self.tools.update_issue("repo", 1, state="closed"))
+
+        mock_issue.edit.assert_called_once_with(state="closed")
+        assert "Updated issue #1" in result
+
+    def test_update_multiple_fields(self):
+        mock_issue = MagicMock()
+        mock_issue.number = 1
+        mock_issue.title = "New title"
+        mock_issue.state = "open"
+        mock_issue.html_url = "https://github.com/EvieHwang/repo/issues/1"
+
+        mock_repo = MagicMock()
+        mock_repo.get_issue.return_value = mock_issue
+
+        with patch("tools.client") as mock_client:
+            mock_client.get_repo.return_value = mock_repo
+            result = run(
+                self.tools.update_issue(
+                    "repo", 1, title="New title", labels="bug, urgent"
+                )
+            )
+
+        mock_issue.edit.assert_called_once_with(
+            title="New title", labels=["bug", "urgent"]
+        )
+        assert "Updated issue #1" in result
+
+    def test_no_fields_returns_message(self):
+        mock_issue = MagicMock()
+        mock_repo = MagicMock()
+        mock_repo.get_issue.return_value = mock_issue
+
+        with patch("tools.client") as mock_client:
+            mock_client.get_repo.return_value = mock_repo
+            result = run(self.tools.update_issue("repo", 1))
+
+        mock_issue.edit.assert_not_called()
+        assert "No fields to update" in result
